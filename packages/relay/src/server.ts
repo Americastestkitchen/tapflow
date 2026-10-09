@@ -69,7 +69,7 @@ async function main(): Promise<void> {
   // relay trusts config — an operator may run the tunnel alongside. See lib/publicUrl.ts.
   // The tunnel listener opens only when its port is named: it is loopback-only, so inside a container only
   // something sharing the relay's network namespace (a sidecar, host networking) could reach it at all.
-  const server = new RelayServer({ port, uploadsDir, wsBackpressureBytes: config.local.wsBackpressureBytes, trustedProxies: config.local.trustedProxies, corsOrigins, tls, tunnelPort: config.local.tunnelPort ?? undefined })
+  const server = new RelayServer({ port, uploadsDir, wsBackpressureBytes: config.local.wsBackpressureBytes, trustedProxies: config.local.trustedProxies, corsOrigins, tls, tunnelPort: config.local.tunnelPort ?? undefined, proxyAuth: config.proxyAuth })
   await server.start()
   logger.info(`tapflow relay running at ${tls ? 'https' : 'http'}://${displayHost}:${port}`)
 

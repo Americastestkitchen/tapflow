@@ -54,6 +54,20 @@ const byoApiTokenTlsSchema = z.object({
 
 const tlsSchema = z.discriminatedUnion('mode', [byoApiTokenTlsSchema, importCertTlsSchema])
 
+// Sign-in delegated to an authenticating reverse proxy (see lib/proxyAuth.ts). A discriminated union
+// so another proxy can be added beside AWS ALB without changing this shape.
+const proxyAuthSchema = z.discriminatedUnion('provider', [
+  z.object({
+    provider: z.literal('aws-alb'),
+    albArn: z.string().regex(/^arn:aws[a-z-]*:elasticloadbalancing:[a-z0-9-]+:\d{12}:loadbalancer\/app\//, {
+      message: 'must be an Application Load Balancer ARN',
+    }),
+    region: z.string().regex(/^[a-z]{2}(-[a-z]+)+-\d$/, { message: 'must be an AWS region, e.g. us-east-1' }),
+    defaultRole: z.enum(['Admin', 'Developer', 'QA', 'Viewer']),
+    adminEmails: z.array(z.string()),
+  }),
+])
+
 const configSchema = z.object({
   local: z.object({
     port: z.number().int().min(1).max(65535),
@@ -90,6 +104,7 @@ const configSchema = z.object({
   agent: z.object({
     lean: z.boolean(),
   }),
+  proxyAuth: proxyAuthSchema.nullable(),
 })
 
 export type TapflowConfig = z.infer<typeof configSchema>
@@ -121,6 +136,7 @@ const DEFAULTS = {
   agent: {
     lean: false,
   },
+  proxyAuth: null,
 } satisfies TapflowConfig
 
 // TAPFLOW_DATA_DIR is a shell value, so a relative one means what it does in a shell: from the cwd.
@@ -300,6 +316,18 @@ function load(): TapflowConfig {
     agent: {
       lean: file.agent?.lean ?? DEFAULTS.agent.lean,
     },
+    proxyAuth: (() => {
+      if (file.proxyAuth == null) return null
+      const p = file.proxyAuth as { provider?: string; albArn?: string; region?: string; defaultRole?: string; adminEmails?: string[] }
+      // Pass the provider through (no silent default) so zod rejects a missing/misspelled one.
+      return {
+        provider: p.provider as 'aws-alb',
+        albArn: p.albArn ?? '',
+        region: p.region ?? '',
+        defaultRole: (p.defaultRole ?? 'QA') as 'QA',
+        adminEmails: p.adminEmails ?? [],
+      }
+    })(),
   }
 
   if (process.env.TAPFLOW_PORT) cfg.local.port = Number(process.env.TAPFLOW_PORT)

@@ -334,6 +334,36 @@ tapflow POSTs to registered URLs when a build's review status changes to `Done` 
 
 Changes to `webhooks` take effect after a relay restart.
 
+## Sign-in through an AWS load balancer (`proxyAuth`) {#proxy-auth}
+
+If the relay sits behind an AWS Application Load Balancer that already signs people in (an `authenticate-oidc` or `authenticate-cognito` listener action), tapflow can take the ALB's word for who someone is instead of asking for its own password.
+
+```json
+{
+  "proxyAuth": {
+    "provider": "aws-alb",
+    "albArn": "arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/app/tapflow/0123456789abcdef",
+    "region": "us-east-1",
+    "defaultRole": "QA",
+    "adminEmails": ["owner@example.com"]
+  }
+}
+```
+
+| Key | Description |
+|-----|-------------|
+| `proxyAuth.provider` | `aws-alb`, the only one so far. |
+| `proxyAuth.albArn` | The load balancer that must have signed the request. A token from any other ALB is ignored. |
+| `proxyAuth.region` | The ALB's region. tapflow fetches its signing keys from `public-keys.auth.elb.<region>.amazonaws.com`. |
+| `proxyAuth.defaultRole` | Role for someone signing in for the first time. Defaults to `QA`. |
+| `proxyAuth.adminEmails` | Addresses created as Admin instead. Doesn't change the role of an existing member. |
+
+On a request with no session, tapflow checks the signature of the ALB's `x-amzn-oidc-data` header, finds the member with that email (creating one the first time), and starts the same session a password sign-in would. Roles, removing a member, and everything else on the Team page work as before. Members created this way have no password, so the load balancer is their only way in. Existing members keep their password and can use either.
+
+Signing out only ends tapflow's session: the next request signs back in through the load balancer. Keep the relay's port reachable from the load balancer only. The signature check means a forged header gets nowhere, but anything that reaches the port directly still bypasses the load balancer's own rules.
+
+Changes to `proxyAuth` take effect after a relay restart.
+
 ## Related {#related}
 
 - [Configure tapflow](/operate/configure): setting up a first install step by step

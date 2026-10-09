@@ -14,6 +14,8 @@ import type { ParsedInbound, ParseFailure, ParseResult } from '@tapflowio/protoc
 import { Router, json } from './router.js'
 import { requireViewAuth, requireAuth, getAuth, verifyPat, touchPat, findPat, findUser } from './middleware/auth.js'
 import { AGENT_SCOPE, WS_ACCESS_CHANGED_REASON, WS_AGENT_OWNER_REASON, WS_SCOPE_REASON, classifyConnection, isAffectedBy, revalidatePrincipal, type AuthChange, type SocketPrincipal } from './lib/connectionAuth.js'
+import { AlbTokenVerifier, applyProxyAuth } from './lib/proxyAuth.js'
+import type { ProxyAuthConfig } from './lib/proxyAuth.js'
 import { isTunnelIngress, markTunnelIngress, proxiedWithoutForwardedFor, resolveClientAddress, resolveRequestClient } from './lib/clientAddress.js'
 import { BuildTicketStore } from './lib/buildTickets.js'
 import { resolveBuildFile } from './lib/buildFiles.js'
@@ -244,6 +246,7 @@ export class RelayServer {
   private publicDir: string
   private uploadsDir: string
   private router: Router
+  private readonly proxyAuthVerifier: AlbTokenVerifier | null
   private resourceBuffers = new Map<string, { cpu: number[]; mem: number[] }>()
   private logBuffer: string[] = []
   private recordingsDir: string = ''
@@ -406,7 +409,7 @@ export class RelayServer {
     timer: ReturnType<typeof setTimeout>
   }>()
 
-  constructor(private readonly options: { port: number; publicDir?: string; uploadsDir?: string; idleTimeoutMs?: number; wsBackpressureBytes?: number; screenshotTimeoutMs?: number; uiTreeTimeoutMs?: number; trustedProxies?: string[]; corsOrigins?: string[]; tls?: { cert: string; key: string }; agentGraceMs?: number; pendingBootTtlMs?: number; tunnel?: TunnelRuntime; tunnelPort?: number }) {
+  constructor(private readonly options: { port: number; publicDir?: string; uploadsDir?: string; idleTimeoutMs?: number; wsBackpressureBytes?: number; screenshotTimeoutMs?: number; uiTreeTimeoutMs?: number; trustedProxies?: string[]; corsOrigins?: string[]; tls?: { cert: string; key: string }; agentGraceMs?: number; pendingBootTtlMs?: number; tunnel?: TunnelRuntime; tunnelPort?: number; proxyAuth?: ProxyAuthConfig | null }) {
     // 0 on both sides is two ephemeral ports, which is what the tests ask for.
     if (options.tunnelPort !== undefined && options.tunnelPort !== 0 && options.tunnelPort === options.port) {
       throw new Error(`The tunnel port (${options.tunnelPort}) must differ from the relay port. Set TAPFLOW_TUNNEL_PORT to another port.`)
@@ -439,6 +442,7 @@ export class RelayServer {
     this.sessions = new SessionManager({ idleTimeoutMs: options.idleTimeoutMs })
     this.publicDir = options.publicDir ?? path.join(import.meta.dirname, '../public')
     this.uploadsDir = options.uploadsDir ?? path.join(import.meta.dirname, '../uploads')
+    this.proxyAuthVerifier = options.proxyAuth ? new AlbTokenVerifier(options.proxyAuth) : null
     this.router = new Router()
     this.registerRoutes()
     // WebCodecs는 secure context(HTTPS)에서만 동작 — tls가 주어지면 https로 종단하고 WSS가 자동 승계한다.
@@ -2928,6 +2932,18 @@ export class RelayServer {
 
   private async handleRequest(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
     this.warnTrustedProxyWithoutXffOnce(req)
+    if (this.proxyAuthVerifier && this.options.proxyAuth) {
+      // Before anything reads the session cookie, so every path below — router, uploads, static —
+      // sees the session this may have just issued. Outside the router's catch, so caught here: a
+      // database fault would otherwise be an unhandled rejection that ends the process.
+      try {
+        await applyProxyAuth(req, res, this.options.proxyAuth, this.proxyAuthVerifier)
+      } catch (err) {
+        logger.error('proxy auth failed:', err)
+        if (!res.headersSent) json(res, 500, { error: 'Internal server error' })
+        return
+      }
+    }
     const corsHeaders = resolveCorsHeaders(req.headers.origin, this.corsAllowed)
     if (corsHeaders) {
       for (const [k, v] of Object.entries(corsHeaders)) res.setHeader(k, v)

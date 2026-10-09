@@ -276,4 +276,39 @@ describe('relay config validation', () => {
       expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('agent.lean'))
     })
   })
+
+  describe('proxyAuth', () => {
+    const ALB = 'arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/app/tapflow/abc123'
+    const withFile = async (body: unknown) => {
+      const fs = await import('fs')
+      vi.mocked(fs.default.existsSync).mockReturnValue(true)
+      vi.mocked(fs.default.readFileSync).mockReturnValue(JSON.stringify(body))
+    }
+
+    it('is off when the file says nothing about it', async () => {
+      await withFile({})
+      vi.spyOn(console, 'warn').mockImplementation(() => {})
+      expect((await import('../lib/config.js')).config.proxyAuth).toBeNull()
+    })
+
+    it('fills defaultRole and adminEmails when only the ALB is named', async () => {
+      await withFile({ proxyAuth: { provider: 'aws-alb', albArn: ALB, region: 'us-east-1' } })
+      vi.spyOn(console, 'warn').mockImplementation(() => {})
+      expect((await import('../lib/config.js')).config.proxyAuth).toEqual({
+        provider: 'aws-alb', albArn: ALB, region: 'us-east-1', defaultRole: 'QA', adminEmails: [],
+      })
+    })
+
+    it.each([
+      ['an unknown provider', { provider: 'nginx', albArn: ALB, region: 'us-east-1' }, 'proxyAuth.provider'],
+      ['a target group ARN', { provider: 'aws-alb', albArn: ALB.replace('loadbalancer/app', 'targetgroup'), region: 'us-east-1' }, 'proxyAuth.albArn'],
+      ['a region that is not one', { provider: 'aws-alb', albArn: ALB, region: 'us-east-1/../x' }, 'proxyAuth.region'],
+      ['an unknown role', { provider: 'aws-alb', albArn: ALB, region: 'us-east-1', defaultRole: 'Owner' }, 'proxyAuth.defaultRole'],
+    ])('stops the load on %s, naming the key', async (_label, proxyAuth, key) => {
+      await withFile({ proxyAuth })
+      vi.spyOn(console, 'warn').mockImplementation(() => {})
+      await expect(import('../lib/config.js')).rejects.toThrow('process.exit')
+      expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining(key))
+    })
+  })
 })
