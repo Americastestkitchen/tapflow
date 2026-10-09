@@ -135,3 +135,15 @@ describe('BuildRow — Viewer (canWrite false)', () => {
     expect(screen.getByRole('button', { name: 'Cancel scheduled deletion of ios build 1, 1.0.0' })).toBeTruthy()
   })
 })
+
+describe('BuildRow — label', () => {
+  it('shows the upload label beside the build number, so same-numbered builds can be told apart', () => {
+    renderRow(makeBuild({ version_label: 'feature/search · PR 42' }))
+    expect(screen.getByText('feature/search · PR 42')).toBeTruthy()
+  })
+
+  it('shows nothing extra without one', () => {
+    renderRow(makeBuild({ version_label: null }))
+    expect(screen.queryByText(/PR/)).toBeNull()
+  })
+})

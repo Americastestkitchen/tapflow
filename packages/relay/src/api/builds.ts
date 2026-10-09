@@ -335,7 +335,7 @@ export function handleListBuilds(req: http.IncomingMessage, res: http.ServerResp
   const conds: string[] = []
   const params: unknown[] = []
 
-  if (q)        { conds.push('b.version_name LIKE ?'); params.push(`%${q}%`) }
+  if (q)        { conds.push('(b.version_name LIKE ? OR b.version_label LIKE ?)'); params.push(`%${q}%`, `%${q}%`) }
   if (platform) { conds.push('ap.platform = ?'); params.push(platform) }
   if (status)   { conds.push('b.status_label = ?'); params.push(status) }
   if (appId)    { conds.push('b.app_id = ?'); params.push(Number(appId)) }

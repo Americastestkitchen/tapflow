@@ -102,6 +102,13 @@ export function BuildRow({
             <span className="text-sm font-medium">
               build <TechLabel>{build.build_number ?? '—'}</TechLabel>
             </span>
+            {/* The upload's label (a branch, a PR): builds of one version often share a number too,
+                and then this is the only thing that tells the rows apart. */}
+            {build.version_label && (
+              <span className="text-sm text-muted-foreground truncate max-w-full" title={build.version_label}>
+                {build.version_label}
+              </span>
+            )}
             <Badge
               tone={build.platform === 'ios' ? 'ios' : 'android'}
               className="text-xs capitalize"
