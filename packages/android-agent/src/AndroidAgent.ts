@@ -13,7 +13,7 @@ import type {
 import fs from 'fs'
 import path from 'path'
 import { tmpdir } from 'os'
-import { createLogger, PlatformError, ValidationError, bootAbandonMessage, BOOT_NO_SESSION_STATE, SHUTDOWN_NO_SESSION_STATE, downloadBuild } from '@tapflowio/agent-core'
+import { createLogger, PlatformError, ValidationError, bootAbandonMessage, BOOT_NO_SESSION_STATE, SHUTDOWN_NO_SESSION_STATE, downloadBuild, matchesDeviceFilter } from '@tapflowio/agent-core'
 import { outcomeMessage, wireReason, type InputOutcome } from './inputOutcome.js'
 import {
   MAX_CLIPBOARD_BYTES, clipboardByteLength,
@@ -520,7 +520,7 @@ export class AndroidAgent implements DeviceAgent, NetworkControlCapability {
     this.relayUrl = relayUrl
     const allDevices = await this.adb.listDevices()
     const devices = this.deviceFilter
-      ? allDevices.filter((d) => d.name === this.deviceFilter || d.id === this.deviceFilter)
+      ? allDevices.filter((d) => matchesDeviceFilter(this.deviceFilter, d))
       : allDevices
 
     return new Promise((resolve, reject) => {

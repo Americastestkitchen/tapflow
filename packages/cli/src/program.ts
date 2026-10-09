@@ -66,7 +66,7 @@ export function createCli(): CAC {
   cli
     .command('start', 'Start relay and available agents locally (local dev shortcut)')
     .option('--platform <platform>', 'Platform to start: registered key or all (default: auto-detect)')
-    .option('--device <name>', 'iOS Simulator name or UDID to use')
+    .option('--device <names>', 'Simulator/emulator names or UDIDs to expose, comma-separated (default: all)')
     .action((opts: { platform?: string; device?: string }) => cmdStart(opts))
 
   cli
@@ -83,7 +83,7 @@ export function createCli(): CAC {
     .command('agent <subcommand>', 'Agent commands (subcommand: start)')
     .option('--relay <url>', 'Relay WebSocket URL (default: ws://localhost:4000)')
     .option('--platform <platform>', 'Platform to start: registered key or all (default: auto-detect)')
-    .option('--device <name>', 'iOS Simulator name or UDID to use')
+    .option('--device <names>', 'Simulator/emulator names or UDIDs to expose, comma-separated (default: all)')
     .option('--token <pat>', "PAT with 'agent' scope for remote relays (or TAPFLOW_AGENT_TOKEN)")
     .action((subcommand: string, opts: { relay?: string; platform?: string; device?: string; token?: string }) => {
       if (subcommand === 'start') return cmdAgentStart(opts)

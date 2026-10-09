@@ -6,7 +6,7 @@ import { randomUUID } from 'crypto'
 import { spawn } from 'child_process'
 import { WebSocket } from 'ws'
 import type { BootAbandonReason, ClipboardErrorPayload, Device, DeviceAgent, NetworkControlCapability, NetworkStatePayload, UIElement } from '@tapflowio/agent-core'
-import { createLogger, PlatformError, ValidationError, bootAbandonMessage, BOOT_NO_SESSION_STATE, SHUTDOWN_NO_SESSION_STATE, downloadBuild } from '@tapflowio/agent-core'
+import { createLogger, PlatformError, ValidationError, bootAbandonMessage, BOOT_NO_SESSION_STATE, SHUTDOWN_NO_SESSION_STATE, downloadBuild, matchesDeviceFilter } from '@tapflowio/agent-core'
 import type {
   AgentControlOutbound, InputErrorReason, ClipboardReplyBody, OpenUrlReplyBody,
   AppInstallReplyBody, AppLaunchReplyBody, AppClearStateReplyBody, FormFactor,
@@ -346,7 +346,7 @@ export class IOSAgent implements DeviceAgent, NetworkControlCapability {
     const allDevices = await this.simctl.listDevices(listTimeoutMs)
     this.revertLeftoverLean(allDevices)
     const devices = this.deviceFilter
-      ? allDevices.filter((d) => d.name === this.deviceFilter || d.id === this.deviceFilter)
+      ? allDevices.filter((d) => matchesDeviceFilter(this.deviceFilter, d))
       : allDevices
     // A `disconnect()` during this await or the one above does not cancel the connect. Every caller
     // today exits the process on the next line (the CLI's SIGINT handlers); one that keeps running
